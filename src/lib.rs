@@ -30,7 +30,50 @@ impl Error for ConversionError {
     }
 }
 
-pub fn digits_from_int<T>(n: T) -> Result<Vec<T>, ConversionError>
+#[derive(Clone)]
+pub struct Digits<T> {
+    values: Vec<T>,
+    index: usize,
+}
+
+impl<T> From<T> for Digits<T>
+where
+    T: Num + NumCast + PartialOrd + Copy,
+{
+    fn from(i: T) -> Self {
+        match digits_from_int(i) {
+            Ok(values) => Self { values, index: 0 },
+            Err(err) => {
+                panic!("{}", err)
+            }
+        }
+    }
+}
+
+impl<T> std::ops::Deref for Digits<T> {
+    type Target = Vec<T>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.values
+    }
+}
+
+impl<T> Iterator for Digits<T>
+where
+    T: Copy,
+{
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index >= self.values.len() {
+            return None;
+        }
+        self.index += 1;
+        Some(self.values[self.index - 1])
+    }
+}
+
+fn digits_from_int<T>(n: T) -> Result<Vec<T>, ConversionError>
 where
     T: Num + NumCast + PartialOrd + Copy,
 {
@@ -57,7 +100,7 @@ where
     }
 }
 
-pub fn int_from_digits<T>(v: Vec<T>) -> T
+fn int_from_digits<T>(v: Vec<T>) -> T
 where
     T: Num + NumCast + NumOps + Copy,
 {
@@ -75,6 +118,47 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn digits_struct_works() {
+        let mut digits = Digits::from(42);
+        assert_eq!(digits.next(), Some(4));
+        assert_eq!(digits.next(), Some(2));
+        assert_eq!(digits.next(), None);
+    }
+
+    #[test]
+    fn iterator_adapters_work() {
+        let digits = Digits::from(42);
+        assert_eq!(digits.len(), 2);
+
+        let digits = Digits::from(369);
+        assert_eq!(digits.count(), 3);
+
+        let mut digits = Digits::from(42).cycle();
+        assert_eq!(digits.next(), Some(4));
+        assert_eq!(digits.next(), Some(2));
+        assert_eq!(digits.next(), Some(4));
+        assert_eq!(digits.next(), Some(2));
+        assert_eq!(digits.next(), Some(4));
+        assert_eq!(digits.next(), Some(2));
+
+        let mut digits = Digits::from(369).enumerate();
+        assert_eq!(digits.next(), Some((0, 3)));
+        assert_eq!(digits.next(), Some((1, 6)));
+        assert_eq!(digits.next(), Some((2, 9)));
+        assert_eq!(digits.next(), None);
+
+        let digits = Digits::from(369);
+        assert_eq!(digits.fold(0, |acc, x| acc + x), 18);
+    }
+
+    #[test]
+    fn contains_works() {
+        let digits = Digits::from(369);
+        assert!(digits.contains(&3));
+        assert_eq!(digits.contains(&4), false);
+    }
 
     #[test]
     fn digits_from_works() {
